@@ -131,13 +131,13 @@ const HRLogin = () => {
         </div>
 
         {/* Default Credentials Info */}
-        <div className="mt-6 p-4 bg-gray-900/50 border border-gray-800 rounded-xl">
+        {/* <div className="mt-6 p-4 bg-gray-900/50 border border-gray-800 rounded-xl">
           <p className="text-gray-400 text-sm text-center">
             <span className="font-semibold text-gray-300">Test Credentials:</span><br />
             Email: hr@techcorp.com<br />
             Password: password123
           </p>
-        </div>
+        </div> */}
       </div>
     </div>
   );

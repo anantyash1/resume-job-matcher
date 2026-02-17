@@ -133,4 +133,29 @@ export const checkApplicationStatus = async (jobId) => {
   return response.data;
 };
 
+
+// Resume viewing for HR
+export const viewResumeDetails = async (resumeId) => {
+  const response = await api.get(`/applications/view-resume/${resumeId}`);
+  return response.data;
+};
+
+export const downloadResume = async (resumeId, filename) => {
+  const response = await api.get(`/applications/download-resume/${resumeId}`, {
+    responseType: 'blob'
+  });
+  
+  // Create download link
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  
+  return response.data;
+};
+
+
 export default api;

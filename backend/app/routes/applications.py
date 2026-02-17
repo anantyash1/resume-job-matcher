@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
+import os
+import json
 from ..database import get_db
 from ..models import User, Application, Job, Resume, Company
 from ..schemas import ApplicationCreate, ApplicationResponse
@@ -49,8 +53,18 @@ def apply_to_job(
         )
     
     # Get company_id from job
-    company = db.query(Company).filter(Company.name == job.company).first()
-    company_id = company.id if company else 1  # Default to 1 if not found
+    company_id = job.company_id
+    
+    # If company_id is None, try to find company by name
+    if not company_id:
+        company = db.query(Company).filter(Company.name == job.company).first()
+        company_id = company.id if company else None
+    
+    if not company_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found for this job"
+        )
     
     # Create application
     new_application = Application(
@@ -117,4 +131,65 @@ def check_application_status(
         "has_applied": application is not None,
         "status": application.status if application else None,
         "applied_at": application.applied_at if application else None
+    }
+
+@router.get("/download-resume/{resume_id}")
+def download_resume(
+    resume_id: int,
+    db: Session = Depends(get_db)
+):
+    """Download resume file - for HR to view candidate resume"""
+    
+    resume = db.query(Resume).filter(Resume.id == resume_id).first()
+    
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found"
+        )
+    
+    # Get the file path
+    file_path = os.path.join("uploads", f"{resume.user_id}_{resume.filename}")
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume file not found on server"
+        )
+    
+    return FileResponse(
+        path=file_path,
+        filename=resume.filename,
+        media_type='application/octet-stream'
+    )
+
+@router.get("/view-resume/{resume_id}")
+def view_resume_details(
+    resume_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get resume details including text content"""
+    
+    resume = db.query(Resume).filter(Resume.id == resume_id).first()
+    
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found"
+        )
+    
+    user = db.query(User).filter(User.id == resume.user_id).first()
+    
+    return {
+        "id": resume.id,
+        "filename": resume.filename,
+        "uploaded_at": resume.uploaded_at,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        } if user else None,
+        "skills": json.loads(resume.skills) if resume.skills else [],
+        "keywords": json.loads(resume.keywords) if resume.keywords else [],
+        "raw_text": resume.raw_text[:1000] + "..." if len(resume.raw_text) > 1000 else resume.raw_text
     }

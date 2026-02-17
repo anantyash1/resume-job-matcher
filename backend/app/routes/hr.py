@@ -413,7 +413,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Company, Application, Job, Resume, User
+from ..models import Company, Application, Job, Resume, User, JobMatch
 from ..schemas import (
     CompanyCreate, CompanyLogin, Company as CompanySchema,
     ApplicationDetailResponse, Token
@@ -505,6 +505,104 @@ def get_current_company(token: str = Depends(oauth2_scheme), db: Session = Depen
         raise credentials_exception
     return company
 
+#working
+
+
+# @router.get("/applications", response_model=List[ApplicationDetailResponse])
+# def get_company_applications(
+#     status_filter: str = None,
+#     current_company: Company = Depends(get_current_company),
+#     db: Session = Depends(get_db)
+# ):
+#     """Get all applications for the company's jobs"""
+    
+#     query = db.query(Application).filter(
+#         Application.company_id == current_company.id
+#     )
+    
+#     if status_filter:
+#         query = query.filter(Application.status == status_filter)
+    
+#     applications = query.order_by(Application.applied_at.desc()).all()
+    
+#     # Format response
+#     results = []
+#     for app in applications:
+#         user = db.query(User).filter(User.id == app.user_id).first()
+#         resume = db.query(Resume).filter(Resume.id == app.resume_id).first()
+#         job = db.query(Job).filter(Job.id == app.job_id).first()
+        
+#         results.append({
+#             "id": app.id,
+#             "user_id": app.user_id,
+#             "user_name": user.username if user else "Unknown",
+#             "user_email": user.email if user else "Unknown",
+#             "resume_id": app.resume_id,
+#             "resume_filename": resume.filename if resume else "Unknown",
+#             "job_id": app.job_id,
+#             "job_title": job.title if job else "Unknown",
+#             "status": app.status,
+#             "cover_letter": app.cover_letter,
+#             "applied_at": app.applied_at,
+#             "skills": json.loads(resume.skills) if resume and resume.skills else []
+#         })
+    
+#     return results
+
+
+# @router.get("/applications", response_model=List[ApplicationDetailResponse])
+# def get_company_applications(
+#     status_filter: str = None,
+#     current_company: Company = Depends(get_current_company),
+#     db: Session = Depends(get_db)
+# ):
+#     """Get all applications for the company's jobs"""
+    
+#     query = db.query(Application).filter(
+#         Application.company_id == current_company.id
+#     )
+    
+#     if status_filter:
+#         query = query.filter(Application.status == status_filter)
+    
+#     applications = query.order_by(Application.applied_at.desc()).all()
+    
+#     # Format response
+#     results = []
+#     for app in applications:
+#         user = db.query(User).filter(User.id == app.user_id).first()
+#         resume = db.query(Resume).filter(Resume.id == app.resume_id).first()
+#         job = db.query(Job).filter(Job.id == app.job_id).first()
+        
+#         # Calculate match score if available
+#         match_score = None
+#         job_match = db.query(JobMatch).filter(
+#             JobMatch.resume_id == app.resume_id,
+#             JobMatch.job_id == app.job_id
+#         ).first()
+        
+#         if job_match:
+#             match_score = job_match.similarity_score
+        
+#         results.append({
+#             "id": app.id,
+#             "user_id": app.user_id,
+#             "user_name": user.username if user else "Unknown",
+#             "user_email": user.email if user else "Unknown",
+#             "resume_id": app.resume_id,
+#             "resume_filename": resume.filename if resume else "Unknown",
+#             "job_id": app.job_id,
+#             "job_title": job.title if job else "Unknown",
+#             "status": app.status,
+#             "cover_letter": app.cover_letter,
+#             "applied_at": app.applied_at,
+#             "skills": json.loads(resume.skills) if resume and resume.skills else [],
+#             "similarity_score": match_score
+#         })
+    
+#     return results
+
+
 @router.get("/applications", response_model=List[ApplicationDetailResponse])
 def get_company_applications(
     status_filter: str = None,
@@ -513,38 +611,65 @@ def get_company_applications(
 ):
     """Get all applications for the company's jobs"""
     
-    query = db.query(Application).filter(
-        Application.company_id == current_company.id
-    )
-    
-    if status_filter:
-        query = query.filter(Application.status == status_filter)
-    
-    applications = query.order_by(Application.applied_at.desc()).all()
-    
-    # Format response
-    results = []
-    for app in applications:
-        user = db.query(User).filter(User.id == app.user_id).first()
-        resume = db.query(Resume).filter(Resume.id == app.resume_id).first()
-        job = db.query(Job).filter(Job.id == app.job_id).first()
+    try:
+        query = db.query(Application).filter(
+            Application.company_id == current_company.id
+        )
         
-        results.append({
-            "id": app.id,
-            "user_id": app.user_id,
-            "user_name": user.username if user else "Unknown",
-            "user_email": user.email if user else "Unknown",
-            "resume_id": app.resume_id,
-            "resume_filename": resume.filename if resume else "Unknown",
-            "job_id": app.job_id,
-            "job_title": job.title if job else "Unknown",
-            "status": app.status,
-            "cover_letter": app.cover_letter,
-            "applied_at": app.applied_at,
-            "skills": json.loads(resume.skills) if resume and resume.skills else []
-        })
-    
-    return results
+        if status_filter:
+            query = query.filter(Application.status == status_filter)
+        
+        applications = query.order_by(Application.applied_at.desc()).all()
+        
+        # Format response
+        results = []
+        for app in applications:
+            try:
+                user = db.query(User).filter(User.id == app.user_id).first()
+                resume = db.query(Resume).filter(Resume.id == app.resume_id).first()
+                job = db.query(Job).filter(Job.id == app.job_id).first()
+                
+                # Calculate match score if available
+                from ..models import JobMatch
+                match_score = None
+                job_match = db.query(JobMatch).filter(
+                    JobMatch.resume_id == app.resume_id,
+                    JobMatch.job_id == app.job_id
+                ).first()
+                
+                if job_match:
+                    match_score = job_match.similarity_score
+                
+                results.append({
+                    "id": app.id,
+                    "user_id": app.user_id,
+                    "user_name": user.username if user else "Unknown",
+                    "user_email": user.email if user else "Unknown",
+                    "resume_id": app.resume_id,
+                    "resume_filename": resume.filename if resume else "Unknown",
+                    "job_id": app.job_id,
+                    "job_title": job.title if job else "Unknown",
+                    "status": app.status,
+                    "cover_letter": app.cover_letter,
+                    "applied_at": app.applied_at,
+                    "skills": json.loads(resume.skills) if resume and resume.skills else [],
+                    "similarity_score": match_score
+                })
+            except Exception as e:
+                print(f"Error processing application {app.id}: {str(e)}")
+                continue
+        
+        return results
+        
+    except Exception as e:
+        print(f"Error in get_company_applications: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching applications: {str(e)}"
+        )
+
 
 @router.patch("/applications/{application_id}/status")
 def update_application_status(
